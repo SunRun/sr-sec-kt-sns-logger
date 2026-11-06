@@ -42,9 +42,17 @@ jobs:
           set -euo pipefail
           VERSION=$(./gradlew -q properties | awk -F': ' '/^version: / { print $2; exit }')
           URL="https://maven.pkg.github.com/sunrun/sr-sec-kt-sns-logger/com/sunrun/security/sr-sec-kt-sns-logger/${VERSION}/sr-sec-kt-sns-logger-${VERSION}.pom"
-          CODE=$(curl -s -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
-          if [ "$CODE" = "200" ]; then
+          CODE=$(curl -s -L -o /dev/null -w '%{http_code}' -u "${GITHUB_ACTOR}:${GITHUB_TOKEN}" "$URL")
+          if [ "$CODE" = "200" ] || [ "$CODE" = "302" ]; then
             echo "com.sunrun.security:sr-sec-kt-sns-logger:${VERSION} is already published. Bump version in build.gradle.kts to release another jar."
             exit 0
           fi
-          ./gradlew publish
+          if ! OUTPUT=$(./gradlew publish 2>&1); then
+            if echo "$OUTPUT" | grep -q "409"; then
+              echo "com.sunrun.security:sr-sec-kt-sns-logger:${VERSION} already exists on GitHub Packages (409 Conflict). Skipping publish."
+              exit 0
+            fi
+            echo "$OUTPUT"
+            exit 1
+          fi
+          echo "$OUTPUT"
