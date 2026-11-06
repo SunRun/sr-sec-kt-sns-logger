@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.sunrun.security"
-version = "1.0.1"
+version = "1.0.2"
 
 java {
     toolchain {
@@ -19,7 +19,9 @@ repositories {
 
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
-    implementation("software.amazon.awssdk:sns:2.31.50")
+    implementation("software.amazon.awssdk:sns:2.31.50") {
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client")
+    }
     implementation("com.fasterxml.jackson.core:jackson-databind:2.18.11")
     implementation("org.slf4j:slf4j-api:2.0.17")
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
