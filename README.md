@@ -2,7 +2,7 @@
 
 Kotlin port of [`sr-sec-py-sns-logger`](https://github.com/SunRun/sr-sec-py-sns-logger) `v2.3.0` for Quarkus Lambdas.
 
-Coordinates: `com.sunrun.security:sr-sec-kt-sns-logger:1.0.2`
+Coordinates: `com.sunrun.security:sr-sec-kt-sns-logger:1.0.3`
 
 Repository: `https://maven.pkg.github.com/sunrun/sr-sec-kt-sns-logger`
 

@@ -1,10 +1,10 @@
 plugins {
-    kotlin("jvm") version "2.1.21"
+    kotlin("jvm") version "2.4.21"
     `maven-publish`
 }
 
 group = "com.sunrun.security"
-version = "1.0.2"
+version = "1.0.3"
 
 java {
     toolchain {
