@@ -6,6 +6,9 @@ private val logger = LoggerFactory.getLogger("security_logging")
 private var lambdaInitialized = false
 private val defaultEnvVars = listOf("ENV_NAME", "ENV", "envName")
 
+/** Test-only hook to verify init guard does not crash cold start. */
+internal var initLambdaSecurityLoggingTestFailure: (() -> Unit)? = null
+
 data class LambdaEnv(
     val names: List<String>,
     val cloudEnvType: String,
@@ -15,6 +18,7 @@ data class LambdaEnv(
 
 fun resetLambdaSecurityLogging() {
     lambdaInitialized = false
+    initLambdaSecurityLoggingTestFailure = null
 }
 
 fun initLambdaSecurityLogging(
@@ -29,25 +33,30 @@ fun initLambdaSecurityLogging(
     transport: SnsTransport? = null,
 ) {
     if (lambdaInitialized) return
-    lambdaInitialized = true
-    val rawName = envVarNames.firstNotNullOfOrNull { name -> System.getenv(name)?.takeIf { it.isNotBlank() } }.orEmpty()
-    val match = envs.firstOrNull { rawName in it.names }
-    val accountId = System.getenv("awsAccountId") ?: System.getenv("AWS_ACCOUNT_ID") ?: match?.accountId ?: defaultAccountId
-    val functionName = System.getenv("AWS_LAMBDA_FUNCTION_NAME") ?: serviceName
-    initSecurityLogging(
-        regionName = region,
-        testMode = testMode,
-        cloudEnvType = match?.cloudEnvType ?: CloudEnvType.DEV,
-        cloudEnvUniqueId = accountId,
-        cloudEnvName = match?.cloudEnvName ?: rawName.ifBlank { "local" },
-        serviceAccountId = "arn:aws:lambda:$region:$accountId:function:$functionName",
-        serviceName = serviceName,
-        logToLocalStdout = logToLocalStdout,
-        localLogging = localLogging,
-        transport = transport,
-    )
-    setSecurityLoggingErrorHandler { error, eventType ->
-        logger.error("Failed to log {}: {}", eventType ?: "unknown", error)
+    try {
+        initLambdaSecurityLoggingTestFailure?.invoke()
+        val rawName = envVarNames.firstNotNullOfOrNull { name -> System.getenv(name)?.takeIf { it.isNotBlank() } }.orEmpty()
+        val match = envs.firstOrNull { rawName in it.names }
+        val accountId = System.getenv("awsAccountId") ?: System.getenv("AWS_ACCOUNT_ID") ?: match?.accountId ?: defaultAccountId
+        val functionName = System.getenv("AWS_LAMBDA_FUNCTION_NAME") ?: serviceName
+        initSecurityLogging(
+            regionName = region,
+            testMode = testMode,
+            cloudEnvType = match?.cloudEnvType ?: CloudEnvType.DEV,
+            cloudEnvUniqueId = accountId,
+            cloudEnvName = match?.cloudEnvName ?: rawName.ifBlank { "local" },
+            serviceAccountId = "arn:aws:lambda:$region:$accountId:function:$functionName",
+            serviceName = serviceName,
+            logToLocalStdout = logToLocalStdout,
+            localLogging = localLogging,
+            transport = transport,
+        )
+        setSecurityLoggingErrorHandler { error, eventType ->
+            logger.error("Failed to log {}: {}", eventType ?: "unknown", error)
+        }
+        lambdaInitialized = true
+    } catch (t: Throwable) {
+        System.err.println("[SecurityLogging] initLambdaSecurityLogging failed: ${t.message}")
     }
 }
 

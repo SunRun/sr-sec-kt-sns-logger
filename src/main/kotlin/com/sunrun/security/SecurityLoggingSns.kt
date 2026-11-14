@@ -202,7 +202,7 @@ private fun baseEvent(
     val env = SecurityLoggingState.envConfig
     val (callerFunction, callerFile) = callerContext()
     val event = linkedMapOf<String, Any?>(
-        "timestamp" to (extras["timestamp"] as? String).orEmpty().ifBlank { Instant.now().toString() },
+        "timestamp" to (extras["timestamp"] as? String).orEmpty().ifBlank { formatSecurityTimestamp() },
         "event_type" to eventType,
         "log_category" to logCategory,
         "status" to status,

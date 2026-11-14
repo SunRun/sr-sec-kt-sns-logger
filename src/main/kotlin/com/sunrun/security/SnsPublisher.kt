@@ -86,7 +86,7 @@ class SnsPublisher(
         val eventUuid = (logDetails["event_uuid"] as? String)?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
         logDetails["event_uuid"] = eventUuid
         if ((logDetails["timestamp"] as? String).isNullOrBlank()) {
-            logDetails["timestamp"] = Instant.now().toString()
+            logDetails["timestamp"] = formatSecurityTimestamp()
         }
         val idList = logDetails["id_list"] as? List<*>
         val messages = if (idList != null) {

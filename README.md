@@ -4,7 +4,7 @@ Kotlin security logging library for Quarkus and JVM AWS Lambda functions. Sends 
 
 Ported from [`sr-sec-py-sns-logger`](https://github.com/SunRun/sr-sec-py-sns-logger) `v2.3.0`.
 
-- **Coordinates**: `com.sunrun.security:sr-sec-kt-sns-logger:1.0.3`
+- **Coordinates**: `com.sunrun.security:sr-sec-kt-sns-logger:1.0.4`
 - **Repository**: `https://maven.pkg.github.com/sunrun/sr-sec-kt-sns-logger`
 - **Target JDK**: 17+ / Kotlin 1.9+
 
@@ -40,7 +40,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.sunrun.security:sr-sec-kt-sns-logger:1.0.3")
+    implementation("com.sunrun.security:sr-sec-kt-sns-logger:1.0.4")
     implementation("software.amazon.awssdk:sns:2.25.0") // Or Quarkus AWS SNS extension
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
 }
@@ -52,7 +52,7 @@ dependencies {
 <dependency>
     <groupId>com.sunrun.security</groupId>
     <artifactId>sr-sec-kt-sns-logger</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
 </dependency>
 ```
 
