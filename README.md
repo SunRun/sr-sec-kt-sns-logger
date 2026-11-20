@@ -10,13 +10,15 @@ Measured 2026-11-19 against real AWS Lambdas in SoftSec Dev (`us-west-2`, 1 GB m
 |---|---|---|---|---|
 | JVM (`java21`) | ~578 ms | ~2,633 ms | 20 / 27 / 49 ms | 492 ms |
 | GraalVM native | see note | see note | see note | see note |
-| SNS unreachable (JVM) | n/a | 18,866 ms, **returned success** | not measured | n/a |
+| SNS unreachable (JVM) | n/a | 19,303 ms, returned `failure` | not measured | n/a |
 
-**Init is cheap; the first log call is not.** `SnsClient` is constructed lazily inside `AwsSnsTransport.publish()`, not during `initLambdaSecurityLogging()`. On a JVM cold start the first `logRecordAccess` therefore pays client construction plus DNS/TLS on top of the publish — ~2.6 s in this measurement. Every subsequent call in the same container is a normal SNS round trip, ~20 ms. Keep that in mind if your service logs on a rarely-hit path.
+**Init is cheap; the first log call used to be expensive.** As of **1.0.5**, `SnsClient` instances are built during `initLambdaSecurityLogging` rather than lazily on first publish, so the construction cost lands in Lambda init where provisioned concurrency can absorb it. Prior to 1.0.5 the first `logRecordAccess` on a cold container paid client construction plus DNS/TLS — measured at ~2.6 s. Every call after that was and remains a normal SNS round trip, ~20 ms.
+
+If you are on 1.0.4 or earlier and your service uses provisioned concurrency, note that the lazy build happens *inside the invocation*, so it appears as billed duration rather than `Init Duration` and provisioned containers do not avoid it.
 
 **Every call must be awaited inside the request path.** Lambda freezes the execution environment on handler return, so a detached publish is killed before it sends and the event is silently lost. The warm ~20 ms figure is that round trip and cannot be moved off the response path.
 
-**Failure path returns a false success.** With the SNS endpoint blackholed, one log call took 18.9 s and **returned `status=success`** even though nothing was published. This client sets no `apiCallTimeout` or `overrideConfiguration` on the SDK client, and the failover attempt is what consumes the time. A service that trusts the returned status will believe an event was delivered when it was not.
+**Failure path reports failure correctly, but is slow.** With both the primary and the failover endpoint unreachable, one log call took 19.3 s and returned `status=failure` with the underlying cause. Nothing is published and the caller can tell. The cost is high because the client sets no `apiCallTimeout` or `overrideConfiguration`, so the failure is bounded only by SDK retry defaults — the measured message showed `SDK Attempt Count: 4`, and the failover attempt adds a second such budget. A service that needs a tighter ceiling should configure a client timeout, accepting that a slow-but-alive network would then drop the event instead of waiting.
 
 **GraalVM native numbers** come from the deployed `a-la-carte-pricing` Lambda rather than a synthetic bench, because this repository has no native build target of its own. That service carries temporary `[sec-logging-timing]` instrumentation (PR `SunRun/a-la-carte-pricing#357`) which reports `init_ms` and `log_ms` per invocation in CloudWatch, and it runs a GraalVM native image with provisioned concurrency.
 
@@ -27,7 +29,7 @@ Kotlin security logging library for Quarkus and JVM AWS Lambda functions. Sends 
 
 Ported from [`sr-sec-py-sns-logger`](https://github.com/SunRun/sr-sec-py-sns-logger) `v2.3.0`.
 
-- **Coordinates**: `com.sunrun.security:sr-sec-kt-sns-logger:1.0.4`
+- **Coordinates**: `com.sunrun.security:sr-sec-kt-sns-logger:1.0.5`
 - **Repository**: `https://maven.pkg.github.com/sunrun/sr-sec-kt-sns-logger`
 - **Target JDK**: 17+ / Kotlin 1.9+
 
@@ -63,7 +65,7 @@ repositories {
 }
 
 dependencies {
-    implementation("com.sunrun.security:sr-sec-kt-sns-logger:1.0.4")
+    implementation("com.sunrun.security:sr-sec-kt-sns-logger:1.0.5")
     implementation("software.amazon.awssdk:sns:2.25.0") // Or Quarkus AWS SNS extension
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.0")
 }
@@ -75,7 +77,7 @@ dependencies {
 <dependency>
     <groupId>com.sunrun.security</groupId>
     <artifactId>sr-sec-kt-sns-logger</artifactId>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
 </dependency>
 ```
 
