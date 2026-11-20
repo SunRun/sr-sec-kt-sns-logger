@@ -16,11 +16,32 @@ fun interface SnsTransport {
 
 class RetriablePublishException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
-class AwsSnsTransport : SnsTransport {
+class AwsSnsTransport(
+    warmRegions: List<String> = emptyList(),
+) : SnsTransport {
     private val clients = mutableMapOf<String, SnsClient>()
 
+    /** Test-only: regions whose clients were built during init. */
+    internal fun warmedRegions(): List<String> = clients.keys.toList()
+
+    init {
+        // Build clients eagerly so the cost lands in Lambda init rather than on the
+        // first log call inside a request. A build failure must not disable logging,
+        // so fall back to the lazy path below.
+        warmRegions.filter { it.isNotBlank() }.distinct().forEach { region ->
+            try {
+                clients[region] = buildClient(region)
+            } catch (t: Throwable) {
+                System.err.println("[SecurityLogging] client warm-up failed for $region: ${t.message}")
+            }
+        }
+    }
+
+    private fun buildClient(region: String): SnsClient =
+        SnsClient.builder().region(software.amazon.awssdk.regions.Region.of(region)).build()
+
     override fun publish(topicArn: String, region: String, message: String) {
-        val client = clients.getOrPut(region) { SnsClient.builder().region(software.amazon.awssdk.regions.Region.of(region)).build() }
+        val client = clients.getOrPut(region) { buildClient(region) }
         try {
             client.publish(PublishRequest.builder().topicArn(topicArn).message(message).build())
         } catch (ex: SdkClientException) {
@@ -61,7 +82,7 @@ class SnsPublisher(
     private val failoverRegion: String?,
     private val enableFailover: Boolean,
     val testMode: Boolean,
-    private val transport: SnsTransport,
+    internal val transport: SnsTransport,
     private val logToLocalStdout: Boolean,
     private val mapper: ObjectMapper,
 ) {

@@ -129,7 +129,11 @@ fun initSecurityLogging(
         failoverRegion = failoverReg,
         enableFailover = enableFailover,
         testMode = testMode,
-        transport = transport ?: AwsSnsTransport(),
+        // Warm the clients now so the first publish does not pay construction cost
+        // inside a request. testMode never publishes, so skip it there.
+        transport = transport ?: AwsSnsTransport(
+            warmRegions = if (testMode) emptyList() else listOfNotNull(region, failoverTopic?.let { failoverReg }),
+        ),
         logToLocalStdout = logToLocalStdout || localLogging,
         mapper = json,
     )
@@ -138,6 +142,10 @@ fun initSecurityLogging(
 fun resetSecurityLoggingForTests() {
     SecurityLoggingState.reset()
 }
+
+/** Test-only: the publisher created by the last init. */
+internal fun initializedPublisherForTests(): SnsPublisher =
+    SecurityLoggingState.publisher ?: throw IllegalStateException("not initialized")
 
 fun setSecurityLoggingErrorHandler(handler: (String, String?) -> Unit) {
     SecurityLoggingState.errorHandler = handler
