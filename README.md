@@ -1,5 +1,28 @@
 # sr-sec-kt-sns-logger
 
+## Latency
+
+Measured 2026-11-19 against real AWS Lambdas in SoftSec Dev (`us-west-2`, 1 GB memory), publishing one `record_access` event per invocation to the dev logging topic.
+
+**Two runtimes, two very different cold starts.** This library is consumed by Quarkus apps that deploy either a plain JVM jar or a GraalVM native image. Use the row that matches your deployment.
+
+| Deployment | Init (library) | First log call | Warm log (p50 / p95 / max) | Lambda `Init Duration` |
+|---|---|---|---|---|
+| JVM (`java21`) | ~578 ms | ~2,633 ms | 20 / 27 / 49 ms | 492 ms |
+| GraalVM native | see note | see note | see note | see note |
+| SNS unreachable (JVM) | n/a | 18,866 ms, **returned success** | not measured | n/a |
+
+**Init is cheap; the first log call is not.** `SnsClient` is constructed lazily inside `AwsSnsTransport.publish()`, not during `initLambdaSecurityLogging()`. On a JVM cold start the first `logRecordAccess` therefore pays client construction plus DNS/TLS on top of the publish — ~2.6 s in this measurement. Every subsequent call in the same container is a normal SNS round trip, ~20 ms. Keep that in mind if your service logs on a rarely-hit path.
+
+**Every call must be awaited inside the request path.** Lambda freezes the execution environment on handler return, so a detached publish is killed before it sends and the event is silently lost. The warm ~20 ms figure is that round trip and cannot be moved off the response path.
+
+**Failure path returns a false success.** With the SNS endpoint blackholed, one log call took 18.9 s and **returned `status=success`** even though nothing was published. This client sets no `apiCallTimeout` or `overrideConfiguration` on the SDK client, and the failover attempt is what consumes the time. A service that trusts the returned status will believe an event was delivered when it was not.
+
+**GraalVM native numbers** come from the deployed `a-la-carte-pricing` Lambda rather than a synthetic bench, because this repository has no native build target of its own. That service carries temporary `[sec-logging-timing]` instrumentation (PR `SunRun/a-la-carte-pricing#357`) which reports `init_ms` and `log_ms` per invocation in CloudWatch, and it runs a GraalVM native image with provisioned concurrency.
+
+Method, raw runs, and the deploy/teardown scripts: see [BENCHMARKS.md](BENCHMARKS.md).
+
+
 Kotlin security logging library for Quarkus and JVM AWS Lambda functions. Sends standardized, structured security events to centralized SoftSec AWS SNS topics for compliance, audit, and incident detection.
 
 Ported from [`sr-sec-py-sns-logger`](https://github.com/SunRun/sr-sec-py-sns-logger) `v2.3.0`.
