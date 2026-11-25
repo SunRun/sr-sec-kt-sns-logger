@@ -4,13 +4,25 @@ plugins {
 }
 
 group = "com.sunrun.security"
-version = "1.0.5"
+version = "1.0.6"
 
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(21))
     }
     withSourcesJar()
+}
+
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        // Ship Java 17 bytecode so Quarkus 2.x / Mandrel 22.3 (Java 17) native builds can consume this jar.
+        // Nothing in this library needs Java 21 language or API features.
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(17)
 }
 
 repositories {
